@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  wings:
+    image: ghcr.io/pterodactyl/wings:latest
+    container_name: pterodactyl_wings
+    restart: always
+    ports:
+      - "8443:8443"
+      - "3000:3000"
+      - "3001:3001"
+      - "8000-8100:8000-8100"
+      - "8000-8100:8000-8100/udp"
+    volumes:
+      - /etc/pterodactyl:/etc/pterodactyl:ro
+      - /var/lib/pterodactyl:/var/lib/pterodactyl
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pterodactyl:/tmp/pterodactyl
+      - wings_logs:/var/log/pterodactyl
+    environment:
+      TZ: "Asia/Jakarta"
+      WINGS_ENVIRONMENT: "production"
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+      - NET_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      default:
+        ipv4_address: 172.21.0.2
+
+  # Service untuk Bot WA Node 20
+  bot-wa:
+    image: node:20-alpine
+    container_name: pterodactyl_bot_wa
+    restart: always
+    working_dir: /app
+    volumes:
+      - ./bot:/app
+      - bot_modules:/app/node_modules
+      - bot_sessions:/app/sessions
+    ports:
+      - "3005:3005"
+    environment:
+      NODE_ENV: "production"
+      NODE_OPTIONS: "--max-old-space-size=512"
+    command: >
+      sh -c "
+        npm install &&
+        npm start
+      "
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3005/health || true"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - wings
+    networks:
+      - default
+
+volumes:
+  wings_logs:
+    driver: local
+  bot_modules:
+    driver: local
+  bot_sessions:
+    driver: local
+
+networks:
+  default:
+    name: pterodactyl_wings_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
